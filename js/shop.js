@@ -479,6 +479,9 @@ async function boot() {
   renderChrome();
   await prod;
   route();
+  const sp = new URLSearchParams(location.search), qc = sp.get('c');
+  if (qc === 'all' || CATS.includes(qc)) goCatalog((sp.get('q') || '').slice(0, 60), qc);
+  else if (sp.get('q')) goCatalog(sp.get('q').slice(0, 60), 'all');
 }
 boot().catch(e => { console.error(e); });
 })();

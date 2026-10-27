@@ -142,11 +142,11 @@ const siteOf = async req => (await settings()).siteUrl || new URL(req.url).origi
 /* ---------- bot profile (name, descriptions, commands) in uz / ru / en ---------- */
 export const BOT_PROFILE = {
   uz: { name: 'Bilyard Ishlab Chiqarish', short: "Bilyard stollari va aksessuarlar: katalog, narxlar, buyurtma. Samarqand.", about: "Samarqanddagi bilyard va snooker stollari ishlab chiqaruvchisi.\n\n🎱 Stollar, sharlar, kiyular va aksessuarlar\n💬 Katalog, narxlar va buyurtma bot ichida\n🚚 Dastavka, o'rnatish va eksport\n📞 +998 88 888 55 82",
-        commands: [{ command: 'start', description: "Do'konni ochish" }, { command: 'orders', description: 'Yangi buyurtmalar (admin)' }] },
+        commands: [{ command: 'start', description: 'Menyu' }, { command: 'menu', description: "Asosiy menyu" }, { command: 'orders', description: 'Yangi buyurtmalar (admin)' }] },
   ru: { name: 'Бильярд Производство', short: 'Бильярдные столы и аксессуары: каталог, цены, заказ. Самарканд.', about: 'Производитель бильярдных и снукерных столов в Самарканде.\n\n🎱 Столы, шары, кии и аксессуары\n💬 Каталог, цены и заказ прямо в боте\n🚚 Доставка, установка и экспорт\n📞 +998 88 888 55 82',
-        commands: [{ command: 'start', description: 'Открыть магазин' }, { command: 'orders', description: 'Новые заказы (админ)' }] },
+        commands: [{ command: 'start', description: 'Меню' }, { command: 'menu', description: 'Главное меню' }, { command: 'orders', description: 'Новые заказы (админ)' }] },
   en: { name: 'Billiard Manufacturing', short: 'Billiard tables and accessories: catalogue, prices, orders. Samarkand.', about: 'Snooker and billiard table maker in Samarkand, Uzbekistan.\n\n🎱 Tables, balls, cues and accessories\n💬 Catalogue, prices and ordering inside the bot\n🚚 Delivery, installation and export\n📞 +998 88 888 55 82',
-        commands: [{ command: 'start', description: 'Open the store' }, { command: 'orders', description: 'New orders (admin)' }] }
+        commands: [{ command: 'start', description: 'Menu' }, { command: 'menu', description: 'Main menu' }, { command: 'orders', description: 'New orders (admin)' }] }
 };
 export async function applyBotProfile(call) {
   const res = {};
@@ -238,47 +238,159 @@ async function setOrderStatus(key, status) {
   return o;
 }
 
-/* ---------- Telegram bot webhook ---------- */
+/* ---------- Telegram bot: menu, prices, language, orders ---------- */
+const PHONE = '+998 88 888 55 82';
+const IG = 'https://www.instagram.com/bilyard_ishlab_chiqarish';
+const BOT = {
+  uz: {
+    name: "O'zbekcha", shop: "🛒 Do'konni ochish", catalog: '🎱 Katalog', prices: '💰 Narxlar', delivery: '🚚 Dastavka', export: '🌍 Eksport', orders: '📦 Buyurtmalarim', contact: '📞 Aloqa', address: '📍 Manzil', lang: '🌐 Til / Язык', admin: '📋 Admin panel', newOrders: '🆕 Yangi buyurtmalar',
+    ph: "Bo'limni tanlang…",
+    welcome: "🎱 <b>Bilyard Ishlab Chiqarish</b>\nSamarqanddagi snooker va bilyard stollari ishlab chiqaruvchisi.\n\n🛒 Katalog, narxlar va buyurtma — do'kon tugmasida\n💬 Savollar uchun pastdagi menyudan foydalaning 👇",
+    pick: "Bo'limni tanlang:", cat: { table: '🎱 Stollar', balls: '⚪ Sharlar', cues: '🏒 Kiyular', acc: '🧰 Aksessuarlar', all: '📚 Barcha mahsulotlar' },
+    pricesH: '💰 <b>Narxlar</b> (USD)', from: 'dan', ask: 'narxi kelishiladi', pricesNote: "Aniq narx va buyurtma — do'kon tugmasida.",
+    deliveryT: "🚚 <b>Dastavka va o'rnatish</b>\n\n• Samarqand va butun O'zbekiston bo'ylab yetkazamiz\n• Ustalarimiz stolni joyida yig'adi, tekislaydi va matoni tortadi\n• Narx manzilga bog'liq, buyurtma paytida kelishiladi\n\n📞 " + PHONE,
+    exportT: "🌍 <b>Eksport</b>\n\n• Xorijdagi klub, mehmonxona va distribyutorlar uchun\n• Himoyali qadoqlash va logistika bo'yicha yordam\n• Shartlar so'rov bo'yicha kelishiladi\n\n📞 " + PHONE,
+    contactT: "📞 <b>Aloqa</b>\n\nTelefon: " + PHONE + "\nInstagram: @bilyard_ishlab_chiqarish",
+    addressT: "📍 <b>Manzil</b>\n\nSamarqand, O'zbekiston.\nAniq manzilni telefon orqali aytamiz: " + PHONE,
+    chooseLang: 'Tilni tanlang / Выберите язык / Choose a language:', langSet: "✅ Til o'zgartirildi.",
+    myOrders: '📦 <b>Buyurtmalarim</b>', noOrders: "Sizda hali buyurtma yo'q. Do'kondan tanlang 👇", st: { new: 'Yangi', confirmed: 'Tasdiqlandi', shipped: 'Yuborildi', done: 'Bajarildi', cancelled: 'Bekor qilindi' },
+    unknown: 'Menyudan tanlang 👇', wa: 'WhatsApp', open: "🛒 Do'konni ochish", adminOnly: '⛔'
+  },
+  ru: {
+    name: 'Русский', shop: '🛒 Открыть магазин', catalog: '🎱 Каталог', prices: '💰 Цены', delivery: '🚚 Доставка', export: '🌍 Экспорт', orders: '📦 Мои заказы', contact: '📞 Контакты', address: '📍 Адрес', lang: '🌐 Til / Язык', admin: '📋 Админ-панель', newOrders: '🆕 Новые заказы',
+    ph: 'Выберите раздел…',
+    welcome: '🎱 <b>Бильярд Производство</b>\nПроизводитель снукерных и бильярдных столов в Самарканде.\n\n🛒 Каталог, цены и заказ — по кнопке магазина\n💬 По вопросам пользуйтесь меню ниже 👇',
+    pick: 'Выберите раздел:', cat: { table: '🎱 Столы', balls: '⚪ Шары', cues: '🏒 Кии', acc: '🧰 Аксессуары', all: '📚 Все товары' },
+    pricesH: '💰 <b>Цены</b> (USD)', from: 'от', ask: 'цена по договорённости', pricesNote: 'Точная цена и заказ — в магазине.',
+    deliveryT: '🚚 <b>Доставка и установка</b>\n\n• Доставим по Самарканду и всему Узбекистану\n• Мастера соберут стол на месте, выставят по уровню и натянут сукно\n• Цена зависит от адреса и согласуется при заказе\n\n📞 ' + PHONE,
+    exportT: '🌍 <b>Экспорт</b>\n\n• Для клубов, отелей и дистрибьюторов за рубежом\n• Защитная упаковка и помощь с логистикой\n• Условия согласуются по запросу\n\n📞 ' + PHONE,
+    contactT: '📞 <b>Контакты</b>\n\nТелефон: ' + PHONE + '\nInstagram: @bilyard_ishlab_chiqarish',
+    addressT: '📍 <b>Адрес</b>\n\nСамарканд, Узбекистан.\nТочный адрес сообщим по телефону: ' + PHONE,
+    chooseLang: 'Tilni tanlang / Выберите язык / Choose a language:', langSet: '✅ Язык изменён.',
+    myOrders: '📦 <b>Мои заказы</b>', noOrders: 'У вас пока нет заказов. Выберите товар в магазине 👇', st: { new: 'Новый', confirmed: 'Подтверждён', shipped: 'Отправлен', done: 'Выполнен', cancelled: 'Отменён' },
+    unknown: 'Выберите пункт меню 👇', wa: 'WhatsApp', open: '🛒 Открыть магазин', adminOnly: '⛔'
+  },
+  en: {
+    name: 'English', shop: '🛒 Open the store', catalog: '🎱 Catalogue', prices: '💰 Prices', delivery: '🚚 Delivery', export: '🌍 Export', orders: '📦 My orders', contact: '📞 Contact', address: '📍 Address', lang: '🌐 Til / Язык', admin: '📋 Admin panel', newOrders: '🆕 New orders',
+    ph: 'Pick a section…',
+    welcome: '🎱 <b>Billiard Manufacturing</b>\nSnooker and billiard table maker in Samarkand.\n\n🛒 Catalogue, prices and ordering are in the store button\n💬 Use the menu below for questions 👇',
+    pick: 'Pick a section:', cat: { table: '🎱 Tables', balls: '⚪ Balls', cues: '🏒 Cues', acc: '🧰 Accessories', all: '📚 All products' },
+    pricesH: '💰 <b>Prices</b> (USD)', from: 'from', ask: 'price on request', pricesNote: 'Exact prices and ordering are in the store.',
+    deliveryT: '🚚 <b>Delivery and installation</b>\n\n• We deliver in Samarkand and across Uzbekistan\n• Our craftsmen assemble the table on site, level it and stretch the cloth\n• The price depends on the address and is agreed when you order\n\n📞 ' + PHONE,
+    exportT: '🌍 <b>Export</b>\n\n• For clubs, hotels and distributors abroad\n• Protective packing and help with logistics\n• Terms are agreed per request\n\n📞 ' + PHONE,
+    contactT: '📞 <b>Contact</b>\n\nPhone: ' + PHONE + '\nInstagram: @bilyard_ishlab_chiqarish',
+    addressT: '📍 <b>Address</b>\n\nSamarkand, Uzbekistan.\nWe give the exact address by phone: ' + PHONE,
+    chooseLang: 'Tilni tanlang / Выберите язык / Choose a language:', langSet: '✅ Language changed.',
+    myOrders: '📦 <b>My orders</b>', noOrders: 'You have no orders yet. Pick something in the store 👇', st: { new: 'New', confirmed: 'Confirmed', shipped: 'Shipped', done: 'Done', cancelled: 'Cancelled' },
+    unknown: 'Pick an item from the menu 👇', wa: 'WhatsApp', open: '🛒 Open the store', adminOnly: '⛔'
+  }
+};
+const ACTIONS = {};
+for (const [lc, b] of Object.entries(BOT)) for (const k of ['catalog', 'prices', 'delivery', 'export', 'orders', 'contact', 'address', 'lang', 'newOrders']) ACTIONS[b[k]] = k;
+const esc = x => String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const usd = n => String(Math.round(n * 100) / 100).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' $';
+
+async function botLang(from) {
+  try { const v = await getJSON(await store('meta'), 'botlang-' + from.id); if (v && BOT[v.lang]) return v.lang; } catch { /* ignore */ }
+  const c = (from.language_code || '').slice(0, 2);
+  return c === 'ru' ? 'ru' : c === 'en' ? 'en' : 'uz';
+}
+const setBotLang = async (id, lang) => (await store('meta')).setJSON('botlang-' + id, { lang });
+const appUrl = (site, lang, q) => `${site}/?lang=${lang}${q ? '&' + q : ''}`;
+function menuKeyboard(lang, site, admin) {
+  const b = BOT[lang];
+  const rows = [
+    [{ text: b.shop, web_app: { url: appUrl(site, lang) } }],
+    [b.catalog, b.prices], [b.delivery, b.export], [b.orders, b.contact], [b.address, b.lang]
+  ];
+  if (admin) rows.push([{ text: b.admin, web_app: { url: site + '/admin/' } }, b.newOrders]);
+  return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: b.ph };
+}
+async function pricesText(req, lang) {
+  const b = BOT[lang];
+  const list = (await products(req)).filter(p => p.active !== false).sort((x, y) => (x.sort ?? 0) - (y.sort ?? 0));
+  let out = b.pricesH + '\n';
+  for (const c of CATS) {
+    const items = list.filter(p => p.cat === c);
+    if (!items.length) continue;
+    out += `\n<b>${b.cat[c]}</b>\n`;
+    for (const p of items) {
+      let price;
+      if (p.variants && p.variants.length) { const m = Math.min(...p.variants.map(v => v.price ?? Infinity)); price = Number.isFinite(m) ? (lang === 'ru' ? `${b.from} ${usd(m)}` : lang === 'en' ? `${b.from} ${usd(m)}` : `${usd(m)} ${b.from}`) : b.ask; }
+      else price = p.price == null ? b.ask : p.priceMax ? `${usd(p.price)} – ${usd(p.priceMax)}` : usd(p.price);
+      out += `• ${esc(L(p.name, lang))} — <b>${esc(price)}</b>\n`;
+    }
+  }
+  return out + '\n' + b.pricesNote;
+}
 async function handleUpdate(req, up) {
   const site = await siteOf(req);
+  const admins = await adminTgIds();
   if (up.callback_query) {
     const cq = up.callback_query;
-    const admins = await adminTgIds();
+    const isAdmin = admins.includes(String(cq.from.id));
+    const lm = /^l:(uz|ru|en)$/.exec(cq.data || '');
+    if (lm) {
+      await setBotLang(cq.from.id, lm[1]);
+      await tg('answerCallbackQuery', { callback_query_id: cq.id, text: BOT[lm[1]].langSet });
+      if (cq.message) await tg('sendMessage', { chat_id: cq.message.chat.id, text: BOT[lm[1]].welcome, parse_mode: 'HTML', reply_markup: menuKeyboard(lm[1], site, isAdmin) });
+      return;
+    }
     const m = /^s:(order-\d+-\w+):([csdx])$/.exec(cq.data || '');
-    if (!m || !admins.includes(String(cq.from.id))) { await tg('answerCallbackQuery', { callback_query_id: cq.id, text: '⛔' }); return; }
+    if (!m || !isAdmin) { await tg('answerCallbackQuery', { callback_query_id: cq.id, text: '⛔' }); return; }
     const o = await setOrderStatus(m[1], ST_CODE[m[2]]);
     await tg('answerCallbackQuery', { callback_query_id: cq.id, text: o ? ST_LABEL[o.status] : 'Topilmadi' });
     if (o && cq.message) await tg('editMessageText', { chat_id: cq.message.chat.id, message_id: cq.message.message_id, text: (cq.message.text || '').split('\n\n📌')[0] + `\n\n📌 ${ST_LABEL[o.status]}`, reply_markup: orderButtons(o.key, site, !String(cq.message.chat.id).startsWith('-')) });
     return;
   }
   const msg = up.message;
-  if (!msg || !msg.text) return;
+  if (!msg || !msg.text || !msg.from) return;
   const chat = msg.chat.id, text = msg.text.trim();
-  const ru = (msg.from && msg.from.language_code) === 'ru';
-  const open = { inline_keyboard: [[{ text: ru ? '🛒 Открыть магазин' : "🛒 Do'konni ochish", web_app: { url: site } }]] };
-  if (/^\/start/.test(text)) {
-    if ((await adminTgIds()).includes(String(msg.from.id))) open.inline_keyboard.push([{ text: '📋 Admin panel', web_app: { url: site + '/admin/' } }]);
-    await tg('sendMessage', { chat_id: chat, text: ru ? 'Добро пожаловать! Бильярдные столы и аксессуары: каталог, цены и заказ прямо в Telegram.' : "Xush kelibsiz! Bilyard stollari va aksessuarlar: katalog, narxlar va buyurtma to'g'ridan-to'g'ri Telegram'da.", reply_markup: open });
-    return;
+  const lang = await botLang(msg.from), b = BOT[lang];
+  const isAdmin = admins.includes(String(msg.from.id));
+  const send = (t, extra = {}) => tg('sendMessage', { chat_id: chat, text: t, parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
+  const keyboard = () => menuKeyboard(lang, site, isAdmin);
+
+  if (/^\/(start|menu|help)/.test(text)) { await send(b.welcome, { reply_markup: keyboard() }); return; }
+
+  const act = ACTIONS[text];
+  if (act === 'catalog') {
+    const rows = [...CATS.map(c => [{ text: b.cat[c], web_app: { url: appUrl(site, lang, 'c=' + c) } }]), [{ text: b.cat.all, web_app: { url: appUrl(site, lang, 'c=all') } }]];
+    await send(b.pick, { reply_markup: { inline_keyboard: rows } }); return;
   }
+  if (act === 'prices') { await send(await pricesText(req, lang), { reply_markup: { inline_keyboard: [[{ text: b.open, web_app: { url: appUrl(site, lang) } }]] } }); return; }
+  if (act === 'delivery' || act === 'export') { await send(b[act + 'T'], { reply_markup: { inline_keyboard: [[{ text: b.open, web_app: { url: appUrl(site, lang) } }]] } }); return; }
+  if (act === 'contact') {
+    await send(b.contactT, { reply_markup: { inline_keyboard: [[{ text: 'Instagram', url: IG }, { text: b.wa, url: 'https://wa.me/998888885582' }], [{ text: 'Telegram', url: 'https://t.me/+998888885582' }]] } }); return;
+  }
+  if (act === 'address') { await send(b.addressT); return; }
+  if (act === 'lang') { await send(b.chooseLang, { reply_markup: { inline_keyboard: [Object.keys(BOT).map(l => ({ text: BOT[l].name, callback_data: 'l:' + l }))] } }); return; }
+  if (act === 'orders') {
+    const us = await store('users'), os = await store('orders');
+    const u = await getJSON(us, 'user-tg' + msg.from.id);
+    const rows = u && u.orderIds ? (await Promise.all(u.orderIds.slice(0, 5).map(k => getJSON(os, k)))).filter(Boolean) : [];
+    if (!rows.length) { await send(b.noOrders, { reply_markup: { inline_keyboard: [[{ text: b.open, web_app: { url: appUrl(site, lang) } }]] } }); return; }
+    await send(b.myOrders + '\n\n' + rows.map(o => `<b>${esc(o.id)}</b> · ${esc(b.st[o.status] || o.status)}\n${esc(o.items.map(i => i.name + ' ×' + i.qty).join(', '))}${o.total ? '\n' + usd(o.total) + (o.quote ? ' +' : '') : ''}`).join('\n\n')); return;
+  }
+  if (act === 'newOrders' || /^\/(orders|buyurtmalar)/.test(text)) {
+    if (!isAdmin) { await send(b.adminOnly); return; }
+    const rows = (await allOrders()).filter(o => o.status === 'new').slice(0, 8);
+    await send(rows.length ? rows.map(o => `<b>${esc(o.id)}</b> · ${esc(o.user.name)} · ${o.total} $`).join('\n') : "Yangi buyurtma yo'q.", { reply_markup: { inline_keyboard: [[{ text: '📋 Admin panel', web_app: { url: site + '/admin/' } }]] } }); return;
+  }
+
+  /* admin login: the admin password sent as a plain message (or after /admin) */
   const am = /^\/admin(?:\s+(.+))?$/s.exec(text);
   const pw = am ? (am[1] || '').trim() : text;
-  if (am && !pw) { await tg('sendMessage', { chat_id: chat, text: ru ? 'Отправьте пароль администратора одним сообщением.' : "Admin parolini bitta xabar bilan yuboring." }); return; }
+  if (am && !pw) { await send(lang === 'ru' ? 'Отправьте пароль администратора одним сообщением.' : "Admin parolini bitta xabar bilan yuboring."); return; }
   if (process.env.ADMIN_PASSWORD && pw && eq(pw, process.env.ADMIN_PASSWORD)) {
     const id = String(msg.from.id);
-    if (!(await adminTgIds()).includes(id)) await saveSettings({ adminTgIds: [...new Set([...((await settings()).adminTgIds || []), id])] });
+    if (!admins.includes(id)) await saveSettings({ adminTgIds: [...new Set([...((await settings()).adminTgIds || []), id])] });
     await tg('deleteMessage', { chat_id: chat, message_id: msg.message_id });
-    await tg('sendMessage', { chat_id: chat, text: `✅ Siz admin sifatida ulandingiz.\n\n📋 Admin panel: ${site}/admin/\n\nYangi buyurtmalar shu yerga keladi, statusini tugmalar bilan o'zgartira olasiz. Buyurtmalar: /orders`, reply_markup: { inline_keyboard: [[{ text: '📋 Admin panel', web_app: { url: site + '/admin/' } }], [{ text: "🛒 Do'kon", web_app: { url: site } }]] } });
+    await send(`✅ Siz admin sifatida ulandingiz.\n\n📋 Admin panel: ${site}/admin/\n\nYangi buyurtmalar shu yerga keladi, statusini tugmalar bilan o'zgartira olasiz. Pastdagi menyuda <b>${b.admin}</b> va <b>${b.newOrders}</b> tugmalari paydo bo'ldi.`, { reply_markup: menuKeyboard(lang, site, true) });
     return;
   }
-  if (am) { await tg('sendMessage', { chat_id: chat, text: "⛔ Parol noto'g'ri." }); return; }
-  if (/^\/(orders|buyurtmalar)/.test(text)) {
-    if (!(await adminTgIds()).includes(String(msg.from.id))) return;
-    const rows = (await allOrders()).filter(o => o.status === 'new').slice(0, 8);
-    await tg('sendMessage', { chat_id: chat, text: rows.length ? rows.map(o => `${o.id} · ${o.user.name} · ${o.total} $`).join('\n') : 'Yangi buyurtma yo\'q.', reply_markup: { inline_keyboard: [[{ text: '📋 Admin panel', web_app: { url: site + '/admin/' } }]] } });
-    return;
-  }
-  await tg('sendMessage', { chat_id: chat, text: ru ? 'Нажмите кнопку, чтобы открыть магазин.' : "Do'konni ochish uchun tugmani bosing.", reply_markup: open });
+  if (am) { await send("⛔ Parol noto'g'ri."); return; }
+  await send(b.unknown, { reply_markup: keyboard() });
 }
 
 /* ---------- router ---------- */
