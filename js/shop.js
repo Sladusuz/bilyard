@@ -192,6 +192,8 @@ function route() {
   if (/^#catalog/.test(h)) {
     const c = h.split('/')[1];
     state.cat = CATS.includes(c) ? c : 'all';
+    if (lastView !== 'catalog' && !state.keepQ) state.q = '';
+    state.keepQ = false;
     document.body.dataset.view = 'catalog';
     renderCatalog();
     if (lastView !== 'catalog') window.scrollTo(0, 0);
@@ -210,7 +212,7 @@ function route() {
   syncTabs();
 }
 addEventListener('hashchange', route);
-function goCatalog(q, cat) { state.q = q || ''; state.cat = cat || 'all'; const h = '#catalog' + (state.cat !== 'all' ? '/' + state.cat : ''); if (location.hash === h) route(); else location.hash = h; }
+function goCatalog(q, cat) { state.q = q || ''; state.keepQ = true; state.cat = cat || 'all'; const h = '#catalog' + (state.cat !== 'all' ? '/' + state.cat : ''); if (location.hash === h) route(); else location.hash = h; }
 
 /* ---------- overlays ---------- */
 const scrim = $('#scrim');
