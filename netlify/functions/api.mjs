@@ -351,6 +351,17 @@ function menuKeyboard(lang, site, admin) {
   if (admin) rows.push([{ text: b.admin, web_app: { url: site + '/admin/' } }, b.newOrders]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: b.ph };
 }
+/* Telegram rejects messages over 4096 chars; split on line breaks so HTML tags stay intact */
+export function chunkText(t, max = 3800) {
+  if (t.length <= max) return [t];
+  const out = []; let cur = '';
+  for (const line of t.split('\n')) {
+    if (cur && cur.length + line.length + 1 > max) { out.push(cur); cur = ''; }
+    cur += (cur ? '\n' : '') + line.slice(0, max);
+  }
+  if (cur) out.push(cur);
+  return out;
+}
 async function pricesText(req, lang) {
   const b = BOT[lang];
   const list = (await products(req)).filter(p => p.active !== false).sort((x, y) => (x.sort ?? 0) - (y.sort ?? 0));
@@ -393,7 +404,12 @@ async function handleUpdate(req, up) {
   const chat = msg.chat.id, text = msg.text.trim();
   const lang = await botLang(msg.from), b = BOT[lang];
   const isAdmin = admins.includes(String(msg.from.id));
-  const send = (t, extra = {}) => tg('sendMessage', { chat_id: chat, text: t, parse_mode: 'HTML', disable_web_page_preview: true, ...extra });
+  const send = async (t, extra = {}) => {
+    const parts = chunkText(t);
+    let r;
+    for (let i = 0; i < parts.length; i++) r = await tg('sendMessage', { chat_id: chat, text: parts[i], parse_mode: 'HTML', disable_web_page_preview: true, ...(i === parts.length - 1 ? extra : {}) });
+    return r;
+  };
   const keyboard = () => menuKeyboard(lang, site, isAdmin);
 
   if (/^\/(start|menu|help)/.test(text)) { await send(b.welcome, { reply_markup: keyboard() }); return; }
