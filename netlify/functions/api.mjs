@@ -116,7 +116,6 @@ function verifyInitData(initData) {
 }
 const orderButtons = (key, siteUrl, priv) => {
   const rows = [[{ text: '✅ Tasdiqlash', callback_data: `s:${key}:c` }, { text: '🚚 Yuborildi', callback_data: `s:${key}:s` }], [{ text: '✔️ Bajarildi', callback_data: `s:${key}:d` }, { text: '❌ Bekor', callback_data: `s:${key}:x` }]];
-  if (priv && siteUrl) rows.push([{ text: '📋 Admin panel', web_app: { url: siteUrl + '/admin/' } }]);
   return { inline_keyboard: rows };
 };
 async function notifyAdmins(text, key, siteUrl) {
@@ -348,7 +347,6 @@ function menuKeyboard(lang, site, admin) {
     [{ text: b.shop, web_app: { url: appUrl(site, lang) } }],
     [b.catalog, b.prices], [b.delivery, b.export], [b.orders, b.contact], [b.address, b.lang]
   ];
-  if (admin) rows.push([{ text: b.admin, web_app: { url: site + '/admin/' } }, b.newOrders]);
   return { keyboard: rows, resize_keyboard: true, is_persistent: true, input_field_placeholder: b.ph };
 }
 /* Telegram rejects messages over 4096 chars; split on line breaks so HTML tags stay intact */
@@ -436,7 +434,8 @@ async function handleUpdate(req, up) {
   if (act === 'newOrders' || /^\/(orders|buyurtmalar)/.test(text)) {
     if (!isAdmin) { await send(b.adminOnly); return; }
     const rows = (await allOrders()).filter(o => o.status === 'new').slice(0, 8);
-    await send(rows.length ? rows.map(o => `<b>${esc(o.id)}</b> · ${esc(o.user.name)} · ${o.total} $`).join('\n') : "Yangi buyurtma yo'q.", { reply_markup: { inline_keyboard: [[{ text: '📋 Admin panel', web_app: { url: site + '/admin/' } }]] } }); return;
+    await send(rows.length ? rows.map(o => `<b>${esc(o.id)}</b> · ${esc(o.user.name)} · ${o.total} $`).join('\n') : "Yangi buyurtma yo'q.");
+    return;
   }
 
   /* admin login: the admin password sent as a plain message (or after /admin) */
@@ -447,7 +446,7 @@ async function handleUpdate(req, up) {
     const id = String(msg.from.id);
     if (!admins.includes(id)) await saveSettings({ adminTgIds: [...new Set([...((await settings()).adminTgIds || []), id])] });
     await tg('deleteMessage', { chat_id: chat, message_id: msg.message_id });
-    await send(`✅ Siz admin sifatida ulandingiz.\n\n📋 Admin panel: ${site}/admin/\n\nYangi buyurtmalar shu yerga keladi, statusini tugmalar bilan o'zgartira olasiz. Pastdagi menyuda <b>${b.admin}</b> va <b>${b.newOrders}</b> tugmalari paydo bo'ldi.`, { reply_markup: menuKeyboard(lang, site, true) });
+    await send("✅ Siz admin sifatida ulandingiz.\n\nYangi buyurtmalar shu yerga keladi, statusini tugmalar bilan o'zgartira olasiz. Admin panelga faqat maxsus kod yuborganda kirasiz — menyuda bu tugma yo'q.", { reply_markup: { inline_keyboard: [[{ text: '📋 Admin panel', web_app: { url: site + '/admin/' } }]] } });
     return;
   }
   if (am) { await send("⛔ Parol noto'g'ri."); return; }
