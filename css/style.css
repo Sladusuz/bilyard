@@ -1,6 +1,6 @@
 /* Layout: cinematic full-bleed hero, alternating dark/ivory bands, interactive configurator as centrepiece */
 :root{--ink:#07110c;--ink2:#0e2018;--felt:#0f6b46;--brass:#c8a45a;--brass2:#ecd391;--ivory:#f5f0e4;--paper:#fffdf7;--mut:#5a675f;--line:rgba(7,17,12,.12);--r:16px;
---serif:'Cormorant Garamond',Georgia,'Times New Roman',serif;--sans:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;--ease:cubic-bezier(.2,.8,.2,1)}
+--serif:'Cormorant Garamond','Cormorant Fallback',Georgia,'Times New Roman',serif;--sans:'Manrope','Manrope Fallback',system-ui,-apple-system,'Segoe UI',sans-serif;--ease:cubic-bezier(.2,.8,.2,1)}
 *{box-sizing:border-box;margin:0;padding:0}
 html{scrollbar-gutter:stable;scroll-behavior:smooth;scroll-padding-top:76px;-webkit-text-size-adjust:100%}
 body{font-family:var(--sans);background:var(--ivory);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
