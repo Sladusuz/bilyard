@@ -441,7 +441,7 @@ export default async function handler(req) {
         if (!tgToken()) return fail(400, 'no token');
         const origin = url.origin;
         const out = {};
-        out.webhook = await tg('setWebhook', { url: origin + '/api/tg-webhook', secret_token: tgSecret(), allowed_updates: ['message', 'callback_query'], drop_pending_updates: false });
+        out.webhook = await tg('setWebhook', { url: origin + '/api/tg-webhook', secret_token: tgSecret(), allowed_updates: ['message', 'callback_query'], drop_pending_updates: true });
         out.profile = await applyBotProfile(tg);
         out.menu = await tg('setChatMenuButton', { menu_button: { type: 'web_app', text: "Do'kon", web_app: { url: origin } } });
         await saveSettings({ siteUrl: origin });
