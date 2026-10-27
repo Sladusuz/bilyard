@@ -38,7 +38,8 @@ async function store(name) {
     try { getStoreFn = (await import('@netlify/blobs')).getStore; }
     catch (e) { if (process.env.NETLIFY || process.env.NETLIFY_LOCAL) throw e; getStoreFn = memStore; }
   }
-  return getStoreFn(name);
+  // strong consistency: a record written a moment ago (new customer, edited product) is always visible to the next request
+  return getStoreFn === memStore ? memStore(name) : getStoreFn({ name, consistency: 'strong' });
 }
 const getJSON = async (s, key) => s.get(key, { type: 'json' });
 
@@ -393,6 +394,50 @@ async function handleUpdate(req, up) {
   await send(b.unknown, { reply_markup: keyboard() });
 }
 
+
+/* ---------- health monitor (runs every minute from health.mjs): checks the site, the API, storage and the bot; alerts the admin on Telegram ---------- */
+export async function runHealthCheck() {
+  const now = Date.now();
+  const ms = await store('meta');
+  const s = await settings();
+  const site = String(process.env.URL || s.siteUrl || '').replace(/\/$/, '');
+  if (!site) return { ok: true, ts: now, failures: [], skipped: 'no site url' };
+  const failures = [], healed = [];
+  const get = async (path, check) => {
+    try {
+      const r = await fetch(site + path + (path.includes('?') ? '&' : '?') + 'hc=' + now, { signal: AbortSignal.timeout(8000), headers: { 'cache-control': 'no-cache' } });
+      const body = await r.text();
+      if (!r.ok) failures.push(`${path}: ${r.status}`);
+      else if (check && !check(body)) failures.push(`${path}: noto'g'ri javob`);
+    } catch { failures.push(`${path}: ulanmadi`); }
+  };
+  const jsonOk = f => b => { try { return f(JSON.parse(b)); } catch { return false; } };
+  await Promise.all([
+    get('/', b => b.includes('js/shop.js')), get('/css/style.css', b => b.length > 1000), get('/js/i18n.js', b => b.includes('I18N')),
+    get('/js/main.js', b => b.length > 1000), get('/js/shop.js', b => b.length > 1000), get('/admin/', b => b.includes('admin.js')),
+    get('/data/products.json', jsonOk(a => Array.isArray(a) && a.length > 0)),
+    get('/api/ping', jsonOk(j => j.ok && j.ready)), get('/api/products', jsonOk(a => Array.isArray(a) && a.length > 0))
+  ]);
+  try { await ms.setJSON('hb', { t: now }); if (!(await getJSON(ms, 'hb'))) failures.push("Ma'lumotlar bazasi: o'qilmadi"); } catch { failures.push("Ma'lumotlar bazasi: xato"); }
+  if (tgToken()) {
+    const wi = await tg('getWebhookInfo');
+    const want = site + '/api/tg-webhook';
+    if (!wi.ok) failures.push('Telegram: javob yoq');
+    else if (!wi.result || wi.result.url !== want) {
+      const r = await tg('setWebhook', { url: want, secret_token: tgSecret(), allowed_updates: ['message', 'callback_query'] });
+      if (r.ok) healed.push('bot webhook qayta ulandi'); else failures.push('Telegram webhook ulanmadi');
+    } else if (wi.result.last_error_message && now / 1000 - (wi.result.last_error_date || 0) < 180) failures.push('Telegram webhook xatosi: ' + wi.result.last_error_message);
+  }
+  const prev = (await getJSON(ms, 'health')) || { ok: true, fails: 0, since: now, alertedAt: 0 };
+  const ok = failures.length === 0;
+  const rec = { ts: now, ok, failures, healed, fails: ok ? 0 : (prev.fails || 0) + 1, since: prev.ok === ok ? prev.since : now, alertedAt: prev.alertedAt || 0 };
+  // alert after 2 failed checks in a row (ignores one-off blips), then at most every 30 minutes
+  if (!ok && rec.fails >= 2 && (!prev.alertedAt || now - prev.alertedAt > 30 * 60000)) { await notifyAdmins(`⚠️ Sayt tekshiruvi: muammo\n${failures.map(f => '• ' + f).join('\n')}\n\n${site}`); rec.alertedAt = now; }
+  if (ok && prev.alertedAt) { await notifyAdmins(`✅ Sayt tiklandi (${Math.max(1, Math.round((now - prev.since) / 60000))} daqiqadan keyin)`); rec.alertedAt = 0; }
+  await ms.setJSON('health', rec);
+  return rec;
+}
+
 /* ---------- router ---------- */
 export default async function handler(req) {
   const url = new URL(req.url);
@@ -401,6 +446,7 @@ export default async function handler(req) {
   const readJSON = async (max = 200000) => { const t = await req.text(); if (t.length > max) throw new Error('big'); return t ? JSON.parse(t) : {}; };
   try {
     if (path === '/ping') return json({ ok: true, ready: !!secret(), tg: !!tgToken() });
+    if (path === '/health' && m === 'GET') { const h = await getJSON(await store('meta'), 'health'); return json({ ok: !h || h.ok, ts: h ? h.ts : null, stale: h ? Date.now() - h.ts > 5 * 60000 : true }); }
 
     /* ----- public ----- */
     if (path === '/products' && m === 'GET') {
@@ -523,7 +569,7 @@ export default async function handler(req) {
     }
     if (path.startsWith('/admin/')) {
       if (!authAdmin(req)) return fail(401, 'auth');
-      if (path === '/admin/status') return json({ telegram: !!(tgToken() && (await notifyTargets()).length), storage: getStoreFn === memStore ? 'memory' : 'blobs', lastNotify: (await getJSON(await store('meta'), 'lastNotify')) || null });
+      if (path === '/admin/status') return json({ telegram: !!(tgToken() && (await notifyTargets()).length), storage: getStoreFn === memStore ? 'memory' : 'blobs', lastNotify: (await getJSON(await store('meta'), 'lastNotify')) || null, health: (await getJSON(await store('meta'), 'health')) || null });
       if (path === '/admin/telegram' && m === 'GET') {
         const s = await settings();
         const out = { token: !!tgToken(), chatId: process.env.TELEGRAM_CHAT_ID || s.chatId || '', admins: await adminTgIds(), siteUrl: s.siteUrl || '', webhook: false, chats: [], bot: '' };
