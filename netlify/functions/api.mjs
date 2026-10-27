@@ -137,6 +137,50 @@ async function notifyAdmins(text, key, siteUrl) {
   try { await (await store('meta')).setJSON('lastNotify', rec); } catch { /* ignore */ }
   return rec;
 }
+
+/* ---------- order photos for Telegram (JPEG/PNG copies; WebP/SVG are not accepted by sendPhoto) ---------- */
+async function tgImageUrl(site, img) {
+  if (!img) return '';
+  let m = /^img\/opt\/(.+)-960\.webp$/.exec(img);
+  if (m) return `${site}/img/tg/${m[1]}.jpg`;
+  m = /^img\/products\/([\w-]+)\.svg$/.exec(img);
+  if (m) return `${site}/img/tg/p-${m[1]}.png`;
+  m = /^\/api\/img\/(\w+)$/.exec(img);
+  if (m) { try { if (await (await store('images')).get(m[1] + '-tg')) return `${site}/api/img/${m[1]}-tg`; } catch { /* use main */ } return site + img; }
+  return '';
+}
+async function notifyOrder(order, text, site) {
+  const rec = { ts: Date.now(), ok: false, error: '', targets: 0 };
+  try {
+    if (!tgToken()) rec.error = "TELEGRAM_BOT_TOKEN yo'q";
+    else {
+      const targets = await notifyTargets();
+      rec.targets = targets.length;
+      if (!targets.length) rec.error = "Qabul qiluvchi yo'q: botga admin parolini yuboring";
+      const media = [];
+      for (const it of order.items) {
+        if (media.length >= 10) break;
+        const url = await tgImageUrl(site, it.img);
+        if (url && !media.some(x => x.media === url)) media.push({ type: 'photo', media: url, caption: `${media.length + 1}. ${it.name}${it.variant ? ' (' + it.variant + ')' : ''} × ${it.qty}`.slice(0, 200) });
+      }
+      for (const chat of targets) {
+        const markup = orderButtons(order.key, site, !String(chat).startsWith('-'));
+        let r = { ok: false };
+        if (media.length === 1) {
+          r = await tg('sendPhoto', { chat_id: chat, photo: media[0].media, caption: text.slice(0, 1000), reply_markup: markup });
+          if (r.ok && text.length > 1000) r = await tg('sendMessage', { chat_id: chat, text: text.slice(1000), reply_markup: markup });
+        } else if (media.length > 1) {
+          await tg('sendMediaGroup', { chat_id: chat, media });
+        }
+        if (!r.ok) r = await tg('sendMessage', { chat_id: chat, text, reply_markup: markup });
+        if (r.ok) rec.ok = true; else rec.error = r.description || rec.error || 'send failed';
+      }
+    }
+  } catch { rec.error = 'exception'; }
+  try { await (await store('meta')).setJSON('lastNotify', rec); } catch { /* ignore */ }
+  return rec;
+}
+
 const siteOf = async req => (await settings()).siteUrl || new URL(req.url).origin;
 
 
@@ -202,7 +246,7 @@ async function createOrder(req, user, body) {
     const q = Math.min(99, Math.max(1, parseInt(it.q, 10) || 1));
     const v = Number.isInteger(it.v) && p.variants && p.variants[it.v] ? p.variants[it.v] : null;
     const price = v ? v.price : p.price, priceMax = v ? v.priceMax : p.priceMax;
-    items.push({ id: p.id, name: L(p.name), variant: v ? L(v.name) : '', qty: q, unit: L(p.unit), price, priceMax: priceMax || null });
+    items.push({ id: p.id, name: L(p.name), variant: v ? L(v.name) : '', qty: q, unit: L(p.unit), price, priceMax: priceMax || null, img: (p.images && p.images[0]) || '' });
   }
   if (!items.length) return null;
   const total = items.reduce((s, i) => s + (i.price && !i.priceMax ? i.price * i.qty : 0), 0);
@@ -221,7 +265,7 @@ async function createOrder(req, user, body) {
   const u = await getJSON(us, user.key);
   if (u) { u.orderIds = [order.key, ...(u.orderIds || [])].slice(0, 100); if (phone && !u.phone) u.phone = phone; await us.setJSON(user.key, u); }
   const lines = items.map(i => `• ${i.name}${i.variant ? ' (' + i.variant + ')' : ''} × ${i.qty}` + (i.price ? ` — ${i.priceMax ? i.price + '–' + i.priceMax : i.price} $` : '')).join('\n');
-  await notifyAdmins(`🛒 Yangi buyurtma ${order.id}\n👤 ${user.name}${order.user.tg ? ' (@' + order.user.tg + ')' : ''}\n📞 ${phone ? '+' + phone : '—'}\n📍 ${[order.city, order.address].filter(Boolean).join(', ') || '—'}\n\n${lines}\n\n💰 Jami: ${total} $${quote ? ' + kelishiladigan narxlar' : ''}${order.note ? '\n📝 ' + order.note : ''}`, order.key, await siteOf(req)).catch(() => null);
+  await notifyOrder(order, `🛒 Yangi buyurtma ${order.id}\n👤 ${user.name}${order.user.tg ? ' (@' + order.user.tg + ')' : ''}\n📞 ${phone ? '+' + phone : '—'}\n📍 ${[order.city, order.address].filter(Boolean).join(', ') || '—'}\n\n${lines}\n\n💰 Jami: ${total} $${quote ? ' + kelishiladigan narxlar' : ''}${order.note ? '\n📝 ' + order.note : ''}`, await siteOf(req)).catch(() => null);
   return order;
 }
 async function allOrders() {
@@ -626,7 +670,8 @@ export default async function handler(req) {
         if (!IMG_TYPES.includes(type)) return fail(415, 'type');
         const buf = Buffer.from(await req.arrayBuffer());
         if (!buf.length || buf.length > 3 * 1024 * 1024) return fail(413, 'size');
-        const id = 'i' + Date.now().toString(36) + rid();
+        const pair = /^i\w{4,30}$/.test(url.searchParams.get('for') || '') ? url.searchParams.get('for') : '';
+        const id = pair ? pair + '-tg' : 'i' + Date.now().toString(36) + rid();
         await (await store('images')).set(id, buf, { metadata: { type } });
         return json({ url: '/api/img/' + id });
       }

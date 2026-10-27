@@ -95,7 +95,7 @@ function orderCard(o) {
   return `<article class="card"><div class="o-head"><b>${esc(o.id)}</b><span class="pill s-${esc(o.status)}">${esc(ST[o.status] || o.status)}</span><span class="muted">${esc(d.toLocaleDateString('uz-UZ'))} ${esc(d.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }))}</span><span class="sp"></span><span class="o-tot">${o.total ? esc(money(o.total)) : ''}${o.quote ? ' + kelishiladi' : ''}</span></div>
   <div class="o-cust"><span>👤 <b>${esc(u.name)}</b></span>${u.phone ? `<a href="tel:+${esc(u.phone)}">📞 +${esc(u.phone)}</a>` : ''}${u.tg ? `<a href="https://t.me/${esc(u.tg)}" target="_blank" rel="noopener">✈️ @${esc(u.tg)}</a>` : ''}<span>📍 ${esc([o.city, o.address].filter(Boolean).join(', ') || '—')}</span></div>
   ${o.note ? `<p class="muted">📝 ${esc(o.note)}</p>` : ''}
-  <ul class="o-items">${(o.items || []).map(i => `<li><span>${esc(i.name)}${i.variant ? ' (' + esc(i.variant) + ')' : ''} × ${i.qty}</span><b>${i.price ? esc(i.priceMax ? i.price + '–' + i.priceMax + ' $' : money(i.price * i.qty)) : 'kelishiladi'}</b></li>`).join('')}</ul>
+  <ul class="o-items">${(o.items || []).map(i => `<li><span>${i.img ? `<img class="oi" src="${esc(imgSrc(i.img))}" alt="" onerror="this.remove()">` : ''}${esc(i.name)}${i.variant ? ' (' + esc(i.variant) + ')' : ''} × ${i.qty}</span><b>${i.price ? esc(i.priceMax ? i.price + '–' + i.priceMax + ' $' : money(i.price * i.qty)) : 'kelishiladi'}</b></li>`).join('')}</ul>
   <div class="o-act">${Object.keys(ST).filter(k => k !== o.status).map(k => `<button class="btn sm ${k === 'confirmed' || k === 'done' ? 'dark' : ''}" data-st="${k}" data-k="${esc(o.key)}">${ST[k]}</button>`).join('')}<button class="btn sm bad" data-del-order="${esc(o.key)}">O'chirish</button></div></article>`;
 }
 function armDelete(btn, fn) {
@@ -179,8 +179,11 @@ function editor(src) {
         st.textContent = `Yuklanmoqda ${i + 1}/${files.length}…`;
         const blob = await shrink(files[i]);
         if (!blob) { toast("Rasm o'qilmadi", true); continue; }
-        const r = await api('/admin/image', { raw: { type: blob.type, blob }, timeout: 40000 });
-        if (r.ok && r.data.url) p.images.push(r.data.url); else toast(r.status === 413 ? 'Rasm juda katta' : 'Rasm yuklanmadi', true);
+        const r = await api('/admin/image', { raw: { type: blob.main.type, blob: blob.main }, timeout: 40000 });
+        if (r.ok && r.data.url) {
+          p.images.push(r.data.url);
+          if (blob.jpg) await api('/admin/image?for=' + r.data.url.split('/').pop(), { raw: { type: 'image/jpeg', blob: blob.jpg }, timeout: 40000 });
+        } else toast(r.status === 413 ? 'Rasm juda katta' : 'Rasm yuklanmadi', true);
       }
       draw();
     };
@@ -207,7 +210,11 @@ async function shrink(file) {
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
     let blob = await new Promise(r => c.toBlob(r, 'image/webp', .82));
     if (!blob || blob.type !== 'image/webp') blob = await new Promise(r => c.toBlob(r, 'image/jpeg', .85));
-    return blob && blob.size < 2.9 * 1024 * 1024 ? blob : null;
+    // a smaller JPEG twin is what Telegram accepts for order photos
+    const k2 = Math.min(1, 900 / Math.max(c.width, c.height)), c2 = document.createElement('canvas'); c2.width = Math.round(c.width * k2); c2.height = Math.round(c.height * k2);
+    c2.getContext('2d').drawImage(c, 0, 0, c2.width, c2.height);
+    const jpg = await new Promise(r => c2.toBlob(r, 'image/jpeg', .82));
+    return blob && blob.size < 2.9 * 1024 * 1024 ? { main: blob, jpg } : null;
   } catch { return null; }
 }
 
