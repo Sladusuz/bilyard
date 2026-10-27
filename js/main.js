@@ -108,7 +108,7 @@ const io = new IntersectionObserver(es => es.forEach(e => {
   if (!e.isIntersecting) return;
   const el = e.target;
   el.classList.add('in');
-  setTimeout(() => el.classList.add('done'), 1400);
+  setTimeout(() => el.classList.add('rvd'), 1400);
   io.unobserve(el);
 }), { threshold: .12, rootMargin: '0px 0px -6% 0px' });
 $$('.rv').forEach(el => io.observe(el));
@@ -281,7 +281,7 @@ function filterGroup(boxSel, itemSel, attr) {
     $$(itemSel).forEach(el => {
       const show = f === 'all' || el.dataset[attr] === f;
       el.hidden = !show;
-      if (show) { el.classList.add('in', 'done'); }
+      if (show) { el.classList.add('in', 'rvd'); }
     });
   });
 }
